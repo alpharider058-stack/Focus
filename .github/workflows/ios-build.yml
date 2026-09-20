@@ -39,14 +39,19 @@ jobs:
       - name: Export JS Bundle
         run: npx expo export --platform ios
 
-      - name: Build iOS Bundle Direct
+      - name: Install CocoaPods
         run: |
           cd ios
           pod install
-          SCHEME_NAME=$(xcodebuild -workspace *.xcworkspace -list | grep -A 10 "Schemes:" | tail -n +2 | head -n 1 | xargs)
-          xcodebuild -workspace *.xcworkspace -scheme "$SCHEME_NAME" -configuration ${{ inputs.configuration }} -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+          cd ..
+
+      - name: Build iOS IPA Unsigned
+        run: |
+          cd ios
+          SCHEME=$(xcodebuild -workspace *.xcworkspace -list -json | node -e "const fs = require('fs'); const data = JSON.parse(fs.readFileSync(0, 'utf-8')); console.log((data.workspace || data.project).schemes[0]);")
+          xcodebuild -workspace *.xcworkspace -scheme "$SCHEME" -configuration ${{ inputs.configuration }} -sdk iphoneos -derivedDataPath build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO AD_HOC_CODE_SIGNING_ALLOWED=YES build
           mkdir -p ../Payload
-          cp -r build/Build/Products/${{ inputs.configuration }}-iphonesimulator/*.app ../Payload/
+          cp -r build/Build/Products/${{ inputs.configuration }}-iphoneos/*.app ../Payload/
           cd ..
           zip -r Gym.ipa Payload
 
