@@ -36,13 +36,20 @@ jobs:
       - name: Expo Prebuild
         run: npx expo prebuild --platform ios --clean
 
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install
+          cd ..
+
       - name: Export JS Bundle
         run: npx expo export --platform ios
 
       - name: Build iOS App Direct
         run: |
           cd ios
-          xcodebuild -workspace *.xcworkspace -scheme Gym -configuration ${{ inputs.configuration }} -sdk iphoneos -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+          SCHEME_NAME=$(xcodebuild -workspace *.xcworkspace -list | grep -A 10 "Schemes:" | tail -n +2 | head -n 1 | xargs)
+          xcodebuild -workspace *.xcworkspace -scheme "$SCHEME_NAME" -configuration ${{ inputs.configuration }} -sdk iphoneos -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
           mkdir -p ../Payload
           cp -r build/Build/Products/${{ inputs.configuration }}-iphoneos/*.app ../Payload/
           cd ..
