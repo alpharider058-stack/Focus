@@ -39,13 +39,14 @@ jobs:
       - name: Export JS Bundle
         run: npx expo export --platform ios
 
-      - name: Build and Package IPA
+      - name: Build iOS Bundle Direct
         run: |
           cd ios
           pod install
-          xcodebuild -workspace *.xcworkspace -scheme $(xcodebuild -workspace *.xcworkspace -list | grep -A 10 "Schemes:" | tail -n +2 | head -n 1 | xargs) -configuration ${{ inputs.configuration }} -sdk iphoneos archive -archivePath build/Gym.xcarchive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+          SCHEME_NAME=$(xcodebuild -workspace *.xcworkspace -list | grep -A 10 "Schemes:" | tail -n +2 | head -n 1 | xargs)
+          xcodebuild -workspace *.xcworkspace -scheme "$SCHEME_NAME" -configuration ${{ inputs.configuration }} -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
           mkdir -p ../Payload
-          cp -r build/Gym.xcarchive/Products/Applications/*.app ../Payload/
+          cp -r build/Build/Products/${{ inputs.configuration }}-iphonesimulator/*.app ../Payload/
           cd ..
           zip -r Gym.ipa Payload
 
