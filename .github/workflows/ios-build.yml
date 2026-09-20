@@ -39,11 +39,13 @@ jobs:
       - name: Export JS Bundle
         run: npx expo export --platform ios
 
-      - name: Build iOS App Native
+      - name: Build iOS App Direct
         run: |
-          npx expo run:ios --configuration ${{ inputs.configuration }} --no-build-cache
-          mkdir -p Payload
-          cp -r ios/build/Build/Products/${{ inputs.configuration }}-iphoneos/*.app Payload/ 2>/dev/null || cp -r ios/build/Build/Products/${{ inputs.configuration }}-iphonesimulator/*.app Payload/
+          cd ios
+          xcodebuild -workspace *.xcworkspace -scheme Gym -configuration ${{ inputs.configuration }} -sdk iphoneos -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+          mkdir -p ../Payload
+          cp -r build/Build/Products/${{ inputs.configuration }}-iphoneos/*.app ../Payload/
+          cd ..
           zip -r Gym.ipa Payload
 
       - name: Upload IPA Artifact
