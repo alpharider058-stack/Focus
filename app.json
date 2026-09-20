@@ -8,7 +8,9 @@
     "scheme": "miprimeraapp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/pulse-logo.png"
+      "icon": "./assets/images/pulse-logo.png",
+      "bundleIdentifier": "com.alpharider058.gym",
+      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
