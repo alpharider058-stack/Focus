@@ -1,0 +1,22 @@
+{
+  "project": "builder ios build",
+  "platform": "ios",
+  "github": {
+    "owner": "alpharider058-stack",
+    "repo": "Gym"
+  },
+  "provider": "github",
+  "codemagic": {},
+  "bitrise": {},
+  "ios": {
+    "path": "ios"
+  },
+  "flutter": {
+    "watch": {}
+  },
+  "reactNative": {
+    "expo": true
+  },
+  "kmp": {},
+  "mobai": {}
+}
