@@ -36,20 +36,14 @@ jobs:
       - name: Expo Prebuild
         run: npx expo prebuild --platform ios --clean
 
-      - name: Install CocoaPods
-        run: |
-          cd ios
-          pod install
-
       - name: Export JS Bundle
         run: npx expo export --platform ios
 
-      - name: Build iOS App with Xcode
+      - name: Build iOS App Native
         run: |
-          XCODE_SCHEME=$(xcodebuild -workspace ios/*.xcworkspace -list | grep -A 10 "Schemes:" | tail -n +2 | head -n 1 | xargs)
-          xcodebuild -workspace ios/*.xcworkspace -scheme "$XCODE_SCHEME" -configuration ${{ inputs.configuration }} -sdk iphoneos -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+          npx expo run:ios --configuration ${{ inputs.configuration }} --no-build-cache
           mkdir -p Payload
-          cp -r build/Build/Products/${{ inputs.configuration }}-iphoneos/*.app Payload/
+          cp -r ios/build/Build/Products/${{ inputs.configuration }}-iphoneos/*.app Payload/ 2>/dev/null || cp -r ios/build/Build/Products/${{ inputs.configuration }}-iphonesimulator/*.app Payload/
           zip -r Gym.ipa Payload
 
       - name: Upload IPA Artifact
