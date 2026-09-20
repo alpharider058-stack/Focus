@@ -10,7 +10,10 @@
     "ios": {
       "icon": "./assets/images/pulse-logo.png",
       "bundleIdentifier": "com.alpharider058.gym",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -39,6 +42,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "989a1693-5706-4f4b-bf30-e1d21bc2c0a7"
+      }
     }
   }
 }
