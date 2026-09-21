@@ -19,6 +19,8 @@ const RoutineLiveActivity = (
   "widget";
 
   const accent = environment.isLuminanceReduced ? "#FFFFFF" : "#34C759";
+  const islandText = "#FFFFFF";
+  const bannerText = environment.colorScheme === "dark" ? "#FFFFFF" : "#111113";
   const progress = `${props.completed}/${props.total}`;
 
   return {
@@ -36,7 +38,9 @@ const RoutineLiveActivity = (
         >
           {props.routineName}
         </Text>
-        <Text>{props.exerciseName}</Text>
+        <Text modifiers={[foregroundStyle(bannerText)]}>
+          {props.exerciseName}
+        </Text>
         <Text modifiers={[font({ size: 13 }), foregroundStyle("#777782")]}>
           {progress} ejercicios completados
         </Text>
@@ -47,7 +51,9 @@ const RoutineLiveActivity = (
         PULSE
       </Text>
     ),
-    compactTrailing: <Text>{progress}</Text>,
+    compactTrailing: (
+      <Text modifiers={[foregroundStyle(islandText)]}>{progress}</Text>
+    ),
     minimal: <Text modifiers={[foregroundStyle(accent)]}>P</Text>,
     expandedLeading: (
       <VStack
@@ -58,7 +64,9 @@ const RoutineLiveActivity = (
         <Text modifiers={[font({ weight: "bold" }), foregroundStyle(accent)]}>
           PULSE
         </Text>
-        <Text modifiers={[font({ size: 12 })]}>Entrenando</Text>
+        <Text modifiers={[font({ size: 12 }), foregroundStyle(islandText)]}>
+          Entrenando
+        </Text>
       </VStack>
     ),
     expandedTrailing: (
@@ -67,14 +75,27 @@ const RoutineLiveActivity = (
         spacing={4}
         modifiers={[padding({ all: 10 })]}
       >
-        <Text modifiers={[font({ weight: "bold", size: 20 })]}>{progress}</Text>
-        <Text modifiers={[font({ size: 12 })]}>completados</Text>
+        <Text
+          modifiers={[
+            font({ weight: "bold", size: 20 }),
+            foregroundStyle(islandText),
+          ]}
+        >
+          {progress}
+        </Text>
+        <Text modifiers={[font({ size: 12 }), foregroundStyle(islandText)]}>
+          completados
+        </Text>
       </VStack>
     ),
     expandedBottom: (
       <HStack spacing={8} modifiers={[padding({ all: 10 })]}>
-        <Text modifiers={[font({ weight: "bold" })]}>{props.exerciseName}</Text>
-        <Text modifiers={[foregroundStyle("#777782")]}>
+        <Text
+          modifiers={[font({ weight: "bold" }), foregroundStyle(islandText)]}
+        >
+          {props.exerciseName}
+        </Text>
+        <Text modifiers={[foregroundStyle("#A7A7AD")]}>
           Siguiente ejercicio
         </Text>
       </HStack>
