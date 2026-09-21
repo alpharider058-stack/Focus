@@ -8,14 +8,6 @@ on:
         description: "Unique build identifier"
         required: true
         type: string
-      configuration:
-        description: "Build configuration (Debug is faster, Release for production)"
-        required: false
-        type: choice
-        options:
-          - Release
-          - Debug
-        default: "Release"
 
 jobs:
   build:
@@ -27,7 +19,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22.13.x
           cache: "npm"
 
       - name: Install dependencies
@@ -37,7 +29,7 @@ jobs:
         run: npx expo prebuild --platform ios --clean
 
       - name: Export JS Bundle
-        run: npx expo export --platform ios
+        run: npm run bundle:ios
 
       - name: Install CocoaPods
         run: |
@@ -49,14 +41,14 @@ jobs:
         run: |
           cd ios
           SCHEME=$(xcodebuild -workspace *.xcworkspace -list -json | node -e "const fs = require('fs'); const data = JSON.parse(fs.readFileSync(0, 'utf-8')); console.log((data.workspace || data.project).schemes[0]);")
-          xcodebuild -workspace *.xcworkspace -scheme "$SCHEME" -configuration ${{ inputs.configuration }} -sdk iphoneos -derivedDataPath build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO AD_HOC_CODE_SIGNING_ALLOWED=YES build
+          xcodebuild -workspace *.xcworkspace -scheme "$SCHEME" -configuration Release -sdk iphoneos -derivedDataPath build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO AD_HOC_CODE_SIGNING_ALLOWED=YES build
           mkdir -p ../Payload
-          cp -r build/Build/Products/${{ inputs.configuration }}-iphoneos/*.app ../Payload/
+          cp -r build/Build/Products/Release-iphoneos/*.app ../Payload/
           cd ..
           zip -r Gym.ipa Payload
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Gym-${{ inputs.build_id }}-${{ inputs.configuration }}
+          name: Gym-${{ inputs.build_id }}-Release
           path: Gym.ipa
