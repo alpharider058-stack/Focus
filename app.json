@@ -37,7 +37,8 @@
           "image": "./assets/images/pulse-logo.png",
           "imageWidth": 180
         }
-      ]
+      ],
+      "expo-widgets"
     ],
     "experiments": {
       "typedRoutes": true,

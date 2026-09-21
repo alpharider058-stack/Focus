@@ -1,7 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -13,11 +15,17 @@ import Animated, {
     FadeInDown,
     FadeInRight,
     Layout,
+    ZoomIn,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { EXERCISES } from "@/data/exercises";
 import { saveTrainingLog } from "@/lib/fitness-storage";
+import {
+    getRoutineActivity,
+    type RoutineActivityProps,
+} from "@/lib/routine-live-activity";
+import type { LiveActivity } from "expo-widgets";
 
 const COLORS = {
   bg: "#F2F2F7",
@@ -49,6 +57,13 @@ type WorkoutExercise = ExerciseItem & {
   done: boolean;
   weightValue: string;
   restValue: string;
+  rpeValue: string;
+  rirValue: string;
+};
+type WorkoutProgress = {
+  items: WorkoutExercise[];
+  restEndsAt: number | null;
+  restExerciseId: string | null;
 };
 
 export default function WorkoutScreen() {
@@ -57,6 +72,10 @@ export default function WorkoutScreen() {
   const params = useLocalSearchParams<{ routineId?: string }>();
   const [routine, setRoutine] = useState<Routine | null>(null);
   const [items, setItems] = useState<WorkoutExercise[]>([]);
+  const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
+  const [restExerciseId, setRestExerciseId] = useState<string | null>(null);
+  const [restRemaining, setRestRemaining] = useState(0);
+  const liveActivity = useRef<LiveActivity<RoutineActivityProps> | null>(null);
 
   useEffect(() => {
     const routineId = Array.isArray(params.routineId)
@@ -88,21 +107,120 @@ export default function WorkoutScreen() {
             rest: settings?.rest || "90",
           };
         });
-      setItems(
-        generated.map((item, index) => ({
-          id: `${selected.id}-${index}`,
-          ...item,
-          done: false,
-          weightValue: String(item.weight ?? ""),
-          restValue: String(item.rest ?? "90"),
-        })),
+      const initialItems = generated.map((item, index) => ({
+        id: `${selected.id}-${index}`,
+        ...item,
+        done: false,
+        weightValue: String(item.weight ?? ""),
+        restValue: String(item.rest ?? "90"),
+        rpeValue: "",
+        rirValue: "",
+      }));
+      AsyncStorage.getItem(`pulse-workout-progress:${selected.id}`).then(
+        (saved) => {
+          if (!saved) {
+            setItems(initialItems);
+            return;
+          }
+          try {
+            const progress = JSON.parse(saved) as WorkoutProgress;
+            setItems(progress.items?.length ? progress.items : initialItems);
+            setRestEndsAt(progress.restEndsAt ?? null);
+            setRestExerciseId(progress.restExerciseId ?? null);
+          } catch {
+            setItems(initialItems);
+          }
+        },
       );
     });
   }, [params.routineId]);
 
+  useEffect(() => {
+    if (!routine || !items.length) return;
+    void AsyncStorage.setItem(
+      `pulse-workout-progress:${routine.id}`,
+      JSON.stringify({
+        items,
+        restEndsAt,
+        restExerciseId,
+      } satisfies WorkoutProgress),
+    );
+  }, [items, restEndsAt, restExerciseId, routine]);
+
+  useEffect(() => {
+    if (!restEndsAt) {
+      setRestRemaining(0);
+      setRestExerciseId(null);
+      return;
+    }
+
+    const updateRemaining = () => {
+      const remaining = Math.max(
+        0,
+        Math.ceil((restEndsAt - Date.now()) / 1000),
+      );
+      setRestRemaining(remaining);
+      if (!remaining) {
+        setRestEndsAt(null);
+        setRestExerciseId(null);
+      }
+    };
+    updateRemaining();
+    const timer = setInterval(updateRemaining, 250);
+    return () => clearInterval(timer);
+  }, [restEndsAt]);
+
+  useEffect(() => {
+    if (
+      Platform.OS !== "ios" ||
+      Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
+      !routine ||
+      !items.length ||
+      liveActivity.current
+    ) {
+      return;
+    }
+
+    const currentExercise =
+      items.find((item) => !item.done) || items[items.length - 1];
+    const routineActivity = getRoutineActivity();
+    liveActivity.current =
+      routineActivity.getInstances()[0] ||
+      routineActivity.start(
+        {
+          routineName: routine.name,
+          exerciseName: currentExercise.name,
+          completed: items.filter((item) => item.done).length,
+          total: items.length,
+        },
+        "miprimeraapp://workout",
+      );
+  }, [items, routine]);
+
+  useEffect(() => {
+    if (
+      Platform.OS !== "ios" ||
+      Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
+      !routine ||
+      !items.length ||
+      !liveActivity.current
+    ) {
+      return;
+    }
+
+    const currentExercise =
+      items.find((item) => !item.done) || items[items.length - 1];
+    void liveActivity.current.update({
+      routineName: routine.name,
+      exerciseName: currentExercise.name,
+      completed: items.filter((item) => item.done).length,
+      total: items.length,
+    });
+  }, [items, routine]);
+
   const updateItem = (
     id: string,
-    field: "weightValue" | "restValue",
+    field: "weightValue" | "restValue" | "rpeValue" | "rirValue",
     value: string,
   ) =>
     setItems((current) =>
@@ -110,16 +228,68 @@ export default function WorkoutScreen() {
         item.id === id ? { ...item, [field]: value } : item,
       ),
     );
-  const toggleDone = (id: string) =>
+  const toggleDone = (id: string) => {
+    const selected = items.find((item) => item.id === id);
+    if (!selected) return;
+    const nextDone = !selected.done;
     setItems((current) =>
       current.map((item) =>
-        item.id === id ? { ...item, done: !item.done } : item,
+        item.id === id ? { ...item, done: nextDone } : item,
       ),
     );
+    if (nextDone) {
+      const restSeconds = Math.max(0, Number(selected.restValue) || 0);
+      setRestEndsAt(restSeconds ? Date.now() + restSeconds * 1000 : null);
+      setRestExerciseId(restSeconds ? id : null);
+    } else {
+      setRestEndsAt(null);
+      setRestExerciseId(null);
+    }
+  };
+  const exitWorkout = async () => {
+    if (routine && items.length) {
+      await AsyncStorage.setItem(
+        `pulse-workout-progress:${routine.id}`,
+        JSON.stringify({
+          items,
+          restEndsAt,
+          restExerciseId,
+        } satisfies WorkoutProgress),
+      );
+    }
+    router.back();
+  };
   const finish = async () => {
     if (!routine) return;
     const completed = items.filter((item) => item.done).length;
     if (!completed) return;
+    const completedItems = items.filter((item) => item.done);
+    const muscleVolumes = completedItems.reduce<Record<string, number>>(
+      (volumes, item) => {
+        const muscle = item.muscle || "Otros";
+        volumes[muscle] =
+          (volumes[muscle] || 0) +
+          (Number(item.weightValue) || 0) *
+            Number(item.reps || 10) *
+            Number(item.sets || 3);
+        return volumes;
+      },
+      {},
+    );
+    const oneRmRecords = completedItems
+      .map((item) => ({
+        exercise: item.name,
+        value: Math.round(
+          (Number(item.weightValue) || 0) * (1 + Number(item.reps || 10) / 30),
+        ),
+      }))
+      .filter((record) => record.value > 0);
+    const rpeValues = completedItems
+      .map((item) => Number(item.rpeValue))
+      .filter((value) => value > 0);
+    const rirValues = completedItems
+      .map((item) => Number(item.rirValue))
+      .filter((value) => value >= 0);
     await saveTrainingLog({
       id: `${routine.id}-${new Date().toISOString().slice(0, 10)}`,
       date: new Date().toISOString(),
@@ -133,7 +303,30 @@ export default function WorkoutScreen() {
           0,
         ),
       minutes: Math.max(10, completed * 8),
+      xp: 25 + completed * 10,
+      muscleVolumes,
+      oneRmRecords,
+      averageRpe: rpeValues.length
+        ? rpeValues.reduce((sum, value) => sum + value, 0) / rpeValues.length
+        : undefined,
+      averageRir: rirValues.length
+        ? rirValues.reduce((sum, value) => sum + value, 0) / rirValues.length
+        : undefined,
     });
+    if (
+      Platform.OS === "ios" &&
+      Constants.executionEnvironment !== ExecutionEnvironment.StoreClient &&
+      liveActivity.current
+    ) {
+      await liveActivity.current.end("immediate", {
+        routineName: routine.name,
+        exerciseName: "Rutina completada",
+        completed,
+        total: items.length,
+      });
+      liveActivity.current = null;
+    }
+    await AsyncStorage.removeItem(`pulse-workout-progress:${routine.id}`);
     router.back();
   };
 
@@ -150,7 +343,7 @@ export default function WorkoutScreen() {
           entering={FadeInDown.duration(450)}
           style={styles.header}
         >
-          <Pressable onPress={() => router.back()} style={styles.back}>
+          <Pressable onPress={exitWorkout} style={styles.back}>
             <Text style={styles.backText}>‹</Text>
           </Pressable>
           <View style={styles.headerCopy}>
@@ -187,11 +380,17 @@ export default function WorkoutScreen() {
               onPress={() => toggleDone(item.id)}
               style={styles.exerciseTop}
             >
-              <View style={[styles.check, item.done && styles.checkDone]}>
-                <Text style={styles.checkText}>
+              <Animated.View
+                key={`${item.id}-${item.done}`}
+                entering={item.done ? ZoomIn.duration(320) : undefined}
+                style={[styles.check, item.done && styles.checkDone]}
+              >
+                <Text
+                  style={[styles.checkText, item.done && styles.checkTextDone]}
+                >
                   {item.done ? "✓" : index + 1}
                 </Text>
-              </View>
+              </Animated.View>
               <View style={styles.exerciseCopy}>
                 <Text style={styles.exerciseName}>{item.name}</Text>
                 <Text style={styles.exerciseMeta}>
@@ -203,6 +402,15 @@ export default function WorkoutScreen() {
                 {item.done ? "Hecho" : "Pendiente"}
               </Text>
             </Pressable>
+            {item.id === restExerciseId && restRemaining > 0 && (
+              <View style={styles.restTimer}>
+                <Text style={styles.restTimerLabel}>DESCANSO</Text>
+                <Text style={styles.restTimerValue}>
+                  {Math.floor(restRemaining / 60)}:
+                  {String(restRemaining % 60).padStart(2, "0")}
+                </Text>
+              </View>
+            )}
             <View style={styles.controls}>
               <View style={styles.control}>
                 <Text style={styles.controlLabel}>PESO (KG)</Text>
@@ -230,7 +438,36 @@ export default function WorkoutScreen() {
                   style={styles.controlInput}
                 />
               </View>
+              <View style={styles.control}>
+                <Text style={styles.controlLabel}>RPE</Text>
+                <TextInput
+                  value={item.rpeValue}
+                  onChangeText={(value) =>
+                    updateItem(item.id, "rpeValue", value)
+                  }
+                  keyboardType="decimal-pad"
+                  placeholder="8"
+                  placeholderTextColor={COLORS.secondary}
+                  style={styles.controlInput}
+                />
+              </View>
+              <View style={styles.control}>
+                <Text style={styles.controlLabel}>RIR</Text>
+                <TextInput
+                  value={item.rirValue}
+                  onChangeText={(value) =>
+                    updateItem(item.id, "rirValue", value)
+                  }
+                  keyboardType="number-pad"
+                  placeholder="2"
+                  placeholderTextColor={COLORS.secondary}
+                  style={styles.controlInput}
+                />
+              </View>
             </View>
+            {item.done && (item.rpeValue || item.rirValue) ? (
+              <Text style={styles.loadAdvice}>{getLoadAdvice(item)}</Text>
+            ) : null}
           </Animated.View>
         ))}
         {!items.length && (
@@ -251,6 +488,16 @@ export default function WorkoutScreen() {
       </ScrollView>
     </View>
   );
+}
+
+function getLoadAdvice(item: WorkoutExercise) {
+  const rpe = Number(item.rpeValue);
+  const rir = Number(item.rirValue);
+  if (rir >= 3 || (rpe > 0 && rpe <= 7))
+    return "Coach: puedes subir 2,5-5% la próxima sesión.";
+  if (rir <= 0 || rpe >= 9.5)
+    return "Coach: mantén o baja 5% la carga y prioriza la técnica.";
+  return "Coach: mantén la carga y busca una repetición más.";
 }
 
 const styles = StyleSheet.create({
@@ -316,6 +563,7 @@ const styles = StyleSheet.create({
   },
   checkDone: { backgroundColor: COLORS.green },
   checkText: { color: COLORS.blue, fontSize: 13, fontWeight: "800" },
+  checkTextDone: { color: "#fff" },
   exerciseCopy: { flex: 1, marginLeft: 11 },
   exerciseName: { color: COLORS.ink, fontSize: 15, fontWeight: "700" },
   exerciseMeta: { color: COLORS.secondary, fontSize: 12, marginTop: 4 },
@@ -337,6 +585,37 @@ const styles = StyleSheet.create({
     color: COLORS.ink,
     fontSize: 15,
     fontWeight: "700",
+  },
+  loadAdvice: {
+    color: "#248A3D",
+    backgroundColor: "#EAF8EE",
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 12,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  restTimer: {
+    marginTop: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: "#EAF8EE",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  restTimerLabel: {
+    color: "#248A3D",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
+  restTimerValue: {
+    color: COLORS.ink,
+    fontSize: 20,
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
   },
   empty: { color: COLORS.secondary, textAlign: "center", padding: 20 },
   finish: {

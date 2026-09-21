@@ -27,6 +27,14 @@ const COLORS = {
   line: "#E6E6EB",
   red: "#FF3B30",
 };
+const MUSCLE_FILTERS = [
+  "Todos",
+  "Pecho",
+  "Espalda",
+  "Brazos",
+  "Piernas",
+  "Core",
+];
 type Routine = {
   id: string;
   name: string;
@@ -46,6 +54,7 @@ export default function RoutinesScreen() {
   const [selected, setSelected] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [activeRoutineId, setActiveRoutineId] = useState<string | null>(null);
+  const [muscleFilter, setMuscleFilter] = useState("Todos");
   const [exerciseSettings, setExerciseSettings] = useState<
     Record<string, { weight: string; rest: string }>
   >({});
@@ -137,12 +146,17 @@ export default function RoutinesScreen() {
   };
   const filtered = useMemo(
     () =>
-      EXERCISES.filter((exercise) =>
-        `${exercise.name} ${exercise.muscle} ${exercise.equipment}`
-          .toLowerCase()
-          .includes(query.toLowerCase()),
+      EXERCISES.filter(
+        (exercise) =>
+          (muscleFilter === "Todos" ||
+            (muscleFilter === "Brazos"
+              ? ["Biceps", "Triceps"].includes(exercise.muscle)
+              : muscleFilter === exercise.muscle)) &&
+          `${exercise.name} ${exercise.muscle} ${exercise.equipment}`
+            .toLowerCase()
+            .includes(query.toLowerCase()),
       ).slice(0, 35),
-    [query],
+    [muscleFilter, query],
   );
   return (
     <View style={styles.root}>
@@ -254,7 +268,8 @@ export default function RoutinesScreen() {
           placeholderTextColor={COLORS.secondary}
           style={styles.searchInput}
         />
-        {query.length > 0 &&
+        <MuscleChips selected={muscleFilter} onSelect={setMuscleFilter} />
+        {(query.length > 0 || muscleFilter !== "Todos") &&
           filtered.map((exercise, index) => (
             <ExerciseRow
               key={exercise.id}
@@ -362,6 +377,7 @@ export default function RoutinesScreen() {
               placeholderTextColor={COLORS.secondary}
               style={styles.searchInput}
             />
+            <MuscleChips selected={muscleFilter} onSelect={setMuscleFilter} />
             <ScrollView
               style={styles.exerciseList}
               keyboardShouldPersistTaps="handled"
@@ -399,6 +415,40 @@ export default function RoutinesScreen() {
         </KeyboardAvoidingView>
       </Modal>
     </View>
+  );
+}
+
+function MuscleChips({
+  selected,
+  onSelect,
+}: {
+  selected: string;
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.chips}
+      contentContainerStyle={styles.chipsContent}
+    >
+      {MUSCLE_FILTERS.map((filter) => (
+        <Pressable
+          key={filter}
+          onPress={() => onSelect(filter)}
+          style={[styles.chip, selected === filter && styles.chipSelected]}
+        >
+          <Text
+            style={[
+              styles.chipText,
+              selected === filter && styles.chipTextSelected,
+            ]}
+          >
+            {filter}
+          </Text>
+        </Pressable>
+      ))}
+    </ScrollView>
   );
 }
 
@@ -592,6 +642,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 12,
   },
+  chips: { marginBottom: 12 },
+  chipsContent: { gap: 8 },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: "#E2E2E7",
+  },
+  chipSelected: { backgroundColor: COLORS.blue },
+  chipText: { color: COLORS.secondary, fontSize: 12, fontWeight: "700" },
+  chipTextSelected: { color: "#fff" },
   exerciseList: { maxHeight: 270, marginBottom: 10 },
   exerciseRow: {
     minHeight: 62,

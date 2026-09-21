@@ -11,7 +11,14 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { getWeeklySummary, readTrainingLogs } from "@/lib/fitness-storage";
+import {
+    getAchievements,
+    getTotalXp,
+    getTrainingStreakWeeks,
+    getWeekStart,
+    getWeeklySummary,
+    readTrainingLogs,
+} from "@/lib/fitness-storage";
 
 const COLORS = {
   background: "#F2F2F7",
@@ -32,7 +39,17 @@ export default function HomeScreen() {
   const [todayPlanRoutine, setTodayPlanRoutine] = useState("");
   const [todayRoutineId, setTodayRoutineId] = useState<string | null>(null);
   const [todayRoutineCompleted, setTodayRoutineCompleted] = useState(false);
+  const [todayCompletedExercises, setTodayCompletedExercises] = useState(0);
+  const [todayTotalExercises, setTodayTotalExercises] = useState(0);
   const [summary, setSummary] = useState(() => getWeeklySummary([]));
+  const [streakWeeks, setStreakWeeks] = useState(0);
+  const [xp, setXp] = useState(0);
+  const [achievements, setAchievements] = useState<
+    ReturnType<typeof getAchievements>
+  >([]);
+  const [muscleVolumes, setMuscleVolumes] = useState<Record<string, number>>(
+    {},
+  );
   const progress = useSharedValue(0);
 
   const loadRoutineData = () =>
@@ -54,34 +71,80 @@ export default function HomeScreen() {
         );
         setTodayPlanRoutine(assigned?.name ?? "");
         setTodayRoutineId(assigned?.id ?? null);
-        setTodayRoutineCompleted(
-          Boolean(
-            assigned &&
-            logs.some((log) => {
-              const isSameDay =
-                new Date(log.date).toLocaleDateString("es-ES") ===
-                new Date().toLocaleDateString("es-ES");
-              const isSameRoutine = log.routineId
-                ? log.routineId === assigned.id
-                : log.routineName === assigned.name;
-              return isSameDay && isSameRoutine;
-            }),
-          ),
-        );
+        if (assigned) {
+          const completedLog = logs.some((log) => {
+            const isSameDay =
+              new Date(log.date).toLocaleDateString("es-ES") ===
+              new Date().toLocaleDateString("es-ES");
+            const isSameRoutine = log.routineId
+              ? log.routineId === assigned.id
+              : log.routineName === assigned.name;
+            return isSameDay && isSameRoutine;
+          });
+          AsyncStorage.getItem(`pulse-workout-progress:${assigned.id}`).then(
+            (saved) => {
+              let completed = 0;
+              let total = 0;
+              if (saved) {
+                try {
+                  const progress = JSON.parse(saved) as {
+                    items?: Array<{ done?: boolean }>;
+                  };
+                  total = progress.items?.length ?? 0;
+                  completed =
+                    progress.items?.filter((item) => item.done).length ?? 0;
+                } catch {
+                  total = 0;
+                }
+              }
+              setTodayCompletedExercises(completed);
+              setTodayTotalExercises(total);
+              setTodayRoutineCompleted(
+                completedLog || (total > 0 && completed === total),
+              );
+            },
+          );
+        } else {
+          setTodayCompletedExercises(0);
+          setTodayTotalExercises(0);
+          setTodayRoutineCompleted(false);
+        }
       } else {
         setTodayPlanRoutine("");
         setTodayRoutineId(null);
+        setTodayCompletedExercises(0);
+        setTodayTotalExercises(0);
         setTodayRoutineCompleted(false);
       }
       setSummary(getWeeklySummary(logs));
+      setStreakWeeks(getTrainingStreakWeeks(logs));
+      setXp(getTotalXp(logs));
+      setAchievements(getAchievements(logs));
+      setMuscleVolumes(
+        logs
+          .filter((log) => new Date(log.date) >= getWeekStart())
+          .reduce<Record<string, number>>((volumes, log) => {
+            Object.entries(log.muscleVolumes ?? {}).forEach(
+              ([muscle, value]) => {
+                volumes[muscle] = (volumes[muscle] || 0) + value;
+              },
+            );
+            return volumes;
+          }, {}),
+      );
     });
   useFocusEffect(() => {
     loadRoutineData();
   });
 
   useEffect(() => {
-    progress.value = withTiming(summary.sets > 0 ? 1 : 0, { duration: 600 });
-  }, [summary.sets, progress]);
+    const workoutProgress = todayTotalExercises
+      ? todayCompletedExercises / todayTotalExercises
+      : summary.sets > 0
+        ? 1
+        : 0;
+    progress.value = withTiming(workoutProgress, { duration: 600 });
+  }, [summary.sets, todayCompletedExercises, todayTotalExercises, progress]);
   const progressStyle = useAnimatedStyle(() => ({
     width: `${progress.value * 100}%`,
   }));
@@ -148,7 +211,9 @@ export default function HomeScreen() {
           </Text>
           <Text style={styles.heroSubtitle}>
             {todayPlanRoutine
-              ? `${todayPlanRoutine} · ${summary.sets} series esta semana`
+              ? todayTotalExercises
+                ? `${todayCompletedExercises} de ${todayTotalExercises} ejercicios completados`
+                : `${todayPlanRoutine} · ${summary.sets} series esta semana`
               : "Tu plan no tiene rutina para hoy"}
           </Text>
           <View style={styles.progressTrack}>
@@ -214,7 +279,12 @@ export default function HomeScreen() {
                   style={[styles.metricDot, { backgroundColor: metric.color }]}
                 />
               </View>
-              <Text style={styles.metricValue}>
+              <Text
+                style={[
+                  styles.metricValue,
+                  metric.value === "0" && styles.metricValueEmpty,
+                ]}
+              >
                 {metric.value}
                 <Text style={styles.metricUnit}> {metric.unit}</Text>
               </Text>
@@ -252,6 +322,86 @@ export default function HomeScreen() {
                   ]}
                 />
                 <Text style={styles.barLabel}>{day}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+        <View style={styles.gamificationCard}>
+          <View style={styles.gamificationTopline}>
+            <View>
+              <Text style={styles.gamificationEyebrow}>PROGRESO</Text>
+              <Text style={styles.gamificationTitle}>
+                Nivel {Math.floor(xp / 250) + 1}
+              </Text>
+            </View>
+            <Text style={styles.xpValue}>{xp} XP</Text>
+          </View>
+          <View style={styles.xpTrack}>
+            <View
+              style={[
+                styles.xpFill,
+                { width: `${Math.min(100, (xp % 250) / 2.5)}%` },
+              ]}
+            />
+          </View>
+          <View style={styles.streakRow}>
+            <Text style={styles.streakHeadline}>
+              Racha: {streakWeeks} {streakWeeks === 1 ? "semana" : "semanas"}
+            </Text>
+            <Text style={styles.badgeCount}>
+              {achievements.filter((item) => item.unlocked).length}/
+              {achievements.length} logros
+            </Text>
+          </View>
+        </View>
+        <View style={styles.progressionCard}>
+          <Text style={styles.sectionTitle}>Sobrecarga semanal</Text>
+          <Text style={styles.progressionHint}>
+            Volumen acumulado por músculo
+          </Text>
+          {Object.keys(muscleVolumes).length ? (
+            Object.entries(muscleVolumes)
+              .sort(([, left], [, right]) => right - left)
+              .slice(0, 6)
+              .map(([muscle, volume]) => (
+                <View key={muscle} style={styles.muscleRow}>
+                  <Text style={styles.muscleName}>{muscle}</Text>
+                  <View style={styles.muscleTrack}>
+                    <View
+                      style={[
+                        styles.muscleFill,
+                        {
+                          width: `${Math.max(6, (volume / Math.max(...Object.values(muscleVolumes))) * 100)}%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.muscleValue}>
+                    {Math.round(volume)} kg
+                  </Text>
+                </View>
+              ))
+          ) : (
+            <Text style={styles.progressionHint}>
+              Completa una sesión para ver tu mapa muscular.
+            </Text>
+          )}
+        </View>
+        <View style={styles.achievementsCard}>
+          <Text style={styles.sectionTitle}>Medallas</Text>
+          <View style={styles.badgeGrid}>
+            {achievements.map((achievement) => (
+              <View
+                key={achievement.id}
+                style={[
+                  styles.badge,
+                  !achievement.unlocked && styles.badgeLocked,
+                ]}
+              >
+                <Text style={styles.badgeIcon}>
+                  {achievement.unlocked ? "★" : "·"}
+                </Text>
+                <Text style={styles.badgeTitle}>{achievement.title}</Text>
               </View>
             ))}
           </View>
@@ -384,8 +534,9 @@ const styles = StyleSheet.create({
   },
   metricDot: { width: 9, height: 9, borderRadius: 5 },
   metricValue: { fontSize: 21, fontWeight: "700", color: COLORS.ink },
-  metricUnit: { fontSize: 11, fontWeight: "500", color: COLORS.secondary },
-  metricLabel: { fontSize: 12, color: COLORS.secondary },
+  metricValueEmpty: { color: "#50505A" },
+  metricUnit: { fontSize: 11, fontWeight: "600", color: "#5E5E68" },
+  metricLabel: { fontSize: 12, color: "#5E5E68", fontWeight: "600" },
   chartCard: {
     backgroundColor: COLORS.card,
     borderRadius: 20,
@@ -403,6 +554,100 @@ const styles = StyleSheet.create({
     marginLeft: "auto",
   },
   streakText: { color: "#248A3D", fontSize: 11, fontWeight: "700" },
+  gamificationCard: {
+    backgroundColor: COLORS.ink,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 18,
+  },
+  gamificationTopline: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  gamificationEyebrow: {
+    color: COLORS.green,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+  gamificationTitle: {
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: "800",
+    marginTop: 4,
+  },
+  xpValue: { color: "#fff", fontSize: 16, fontWeight: "800" },
+  xpTrack: {
+    height: 7,
+    backgroundColor: "#36363D",
+    borderRadius: 4,
+    overflow: "hidden",
+    marginTop: 16,
+  },
+  xpFill: { height: "100%", backgroundColor: COLORS.green, borderRadius: 4 },
+  streakRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 14,
+  },
+  streakHeadline: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  badgeCount: { color: "#A5A5AE", fontSize: 12 },
+  progressionCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 18,
+  },
+  progressionHint: {
+    color: COLORS.secondary,
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 14,
+  },
+  muscleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 11,
+  },
+  muscleName: { width: 62, color: COLORS.ink, fontSize: 11, fontWeight: "700" },
+  muscleTrack: {
+    flex: 1,
+    height: 9,
+    backgroundColor: "#E5E5EA",
+    borderRadius: 5,
+    overflow: "hidden",
+  },
+  muscleFill: { height: "100%", backgroundColor: COLORS.blue, borderRadius: 5 },
+  muscleValue: {
+    width: 55,
+    color: COLORS.secondary,
+    fontSize: 10,
+    textAlign: "right",
+  },
+  achievementsCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 26,
+  },
+  badgeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
+  badge: {
+    width: "48%",
+    minHeight: 62,
+    backgroundColor: "#EAF8EE",
+    borderRadius: 13,
+    padding: 10,
+  },
+  badgeLocked: { backgroundColor: "#F2F2F7", opacity: 0.65 },
+  badgeIcon: { color: "#D89000", fontSize: 18, fontWeight: "800" },
+  badgeTitle: {
+    color: COLORS.ink,
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 4,
+  },
   chartBars: {
     height: 112,
     flexDirection: "row",

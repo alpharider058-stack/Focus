@@ -1,8 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
+    Alert,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -12,6 +13,8 @@ import {
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { readTrainingLogs } from "@/lib/fitness-storage";
 
 const COLORS = {
   bg: "#F2F2F7",
@@ -39,6 +42,35 @@ const weekDays = [
   { key: "6", label: "S" },
   { key: "0", label: "D" },
 ];
+const REQUEST_TIMEOUT_MS = 12000;
+const MAX_RETRIES = 2;
+
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  signal: AbortSignal,
+) {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const abortRequest = () => controller.abort();
+    signal.addEventListener("abort", abortRequest, { once: true });
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      signal.removeEventListener("abort", abortRequest);
+      return response;
+    } catch (error) {
+      clearTimeout(timeout);
+      signal.removeEventListener("abort", abortRequest);
+      if (signal.aborted || attempt === MAX_RETRIES) throw error;
+    }
+  }
+  throw new Error("No se pudo conectar con el servidor");
+}
 
 export default function CoachScreen() {
   const insets = useSafeAreaInsets();
@@ -50,6 +82,35 @@ export default function CoachScreen() {
   const [limitations, setLimitations] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [adaptiveAdvice, setAdaptiveAdvice] = useState("");
+  const requestController = useRef<AbortController | null>(null);
+
+  useEffect(() => () => requestController.current?.abort(), []);
+
+  useEffect(() => {
+    readTrainingLogs().then((logs) => {
+      const latest = logs.find(
+        (log) => log.averageRpe !== undefined || log.averageRir !== undefined,
+      );
+      if (!latest) return;
+      if ((latest.averageRir ?? 2) >= 3 || (latest.averageRpe ?? 8) <= 7) {
+        setAdaptiveAdvice(
+          "Tu última sesión fue controlada. Prueba a subir un 2,5-5% la carga.",
+        );
+      } else if (
+        (latest.averageRpe ?? 8) >= 9.5 ||
+        (latest.averageRir ?? 2) <= 0
+      ) {
+        setAdaptiveAdvice(
+          "Tu última sesión fue muy exigente. Mantén o reduce un 5% la carga.",
+        );
+      } else {
+        setAdaptiveAdvice(
+          "Tu carga está bien ajustada. Mantén el peso y busca una repetición extra.",
+        );
+      }
+    });
+  }, []);
 
   const generate = async () => {
     const expoHost = Constants.expoConfig?.hostUri?.split(":")[0];
@@ -58,24 +119,31 @@ export default function CoachScreen() {
       (expoHost ? `http://${expoHost}:8787` : "http://192.168.1.130:8787");
     setLoading(true);
     setMessage("");
+    requestController.current?.abort();
+    const controller = new AbortController();
+    requestController.current = controller;
     try {
       const profile = await AsyncStorage.getItem("pulse-profile");
-      const response = await fetch(`${endpoint}/api/coach`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          profile: profile ? JSON.parse(profile) : {},
-          goals: selectedGoals,
-          level,
-          days: selectedDays,
-          exerciseCount: Math.min(
-            Math.max(Number.parseInt(exerciseCount, 10) || 5, 1),
-            8,
-          ),
-          equipment,
-          limitations,
-        }),
-      });
+      const response = await fetchWithRetry(
+        `${endpoint}/api/coach`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            profile: profile ? JSON.parse(profile) : {},
+            goals: selectedGoals,
+            level,
+            days: selectedDays,
+            exerciseCount: Math.min(
+              Math.max(Number.parseInt(exerciseCount, 10) || 5, 1),
+              8,
+            ),
+            equipment,
+            limitations,
+          }),
+        },
+        controller.signal,
+      );
       const result = await response.json();
       if (!response.ok)
         throw new Error(
@@ -111,17 +179,15 @@ export default function CoachScreen() {
       );
       setMessage(`Listo: ${routine.name} se ha añadido a Rutinas y Plan.`);
     } catch (error) {
-      if (error instanceof TypeError) {
-        setMessage(
-          "No se puede conectar con el servidor de IA. Ejecuta npm run server y usa la misma Wi-Fi en el móvil y el ordenador.",
-        );
-      } else {
-        setMessage(
-          error instanceof Error ? error.message : "No se pudo generar el plan",
-        );
-      }
+      if (controller.signal.aborted) return;
+      const friendlyMessage =
+        error instanceof DOMException && error.name === "AbortError"
+          ? "La solicitud tardó demasiado. Comprueba tu conexión e inténtalo de nuevo."
+          : "Sin conexión a Internet. Comprueba tu red e inténtalo de nuevo.";
+      setMessage(friendlyMessage);
+      Alert.alert("No se pudo generar el plan", friendlyMessage);
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   };
 
@@ -140,6 +206,12 @@ export default function CoachScreen() {
           Responde unas preguntas y la IA preparará una rutina y una semana de
           entrenamiento.
         </Text>
+        {adaptiveAdvice ? (
+          <View style={styles.adaptiveCard}>
+            <Text style={styles.adaptiveLabel}>AJUSTE ADAPTATIVO</Text>
+            <Text style={styles.adaptiveText}>{adaptiveAdvice}</Text>
+          </View>
+        ) : null}
         <Text style={styles.label}>Objetivos (puedes elegir varios)</Text>
         <View style={styles.options}>
           {goals.map((item) => (
@@ -350,6 +422,24 @@ const styles = StyleSheet.create({
     padding: 12,
     marginTop: 16,
     lineHeight: 19,
+  },
+  adaptiveCard: {
+    backgroundColor: "#EAF8EE",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 8,
+  },
+  adaptiveLabel: {
+    color: "#248A3D",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
+  adaptiveText: {
+    color: COLORS.ink,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 5,
   },
   button: {
     minHeight: 52,
