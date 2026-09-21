@@ -14,10 +14,10 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22.13.x
           cache: "npm"
@@ -28,9 +28,6 @@ jobs:
       - name: Expo Prebuild
         run: npx expo prebuild --platform ios --clean
 
-      - name: Export JS Bundle
-        run: npm run bundle:ios
-
       - name: Install CocoaPods
         run: |
           cd ios
@@ -40,15 +37,45 @@ jobs:
       - name: Build iOS IPA Unsigned
         run: |
           cd ios
-          SCHEME=$(xcodebuild -workspace *.xcworkspace -list -json | node -e "const fs = require('fs'); const data = JSON.parse(fs.readFileSync(0, 'utf-8')); console.log((data.workspace || data.project).schemes[0]);")
-          xcodebuild -workspace *.xcworkspace -scheme "$SCHEME" -configuration Release -sdk iphoneos -derivedDataPath build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO AD_HOC_CODE_SIGNING_ALLOWED=YES build
+          WORKSPACE=$(find . -maxdepth 1 -name '*.xcworkspace' -print -quit)
+          if [ -z "$WORKSPACE" ]; then
+            echo "No Xcode workspace found"
+            exit 1
+          fi
+
+          SCHEME=""
+          SCHEMES=$(xcodebuild -workspace "$WORKSPACE" -list -json | node -e "const fs = require('fs'); const data = JSON.parse(fs.readFileSync(0, 'utf-8')); for (const scheme of (data.workspace || data.project).schemes || []) console.log(scheme);")
+          while IFS= read -r CANDIDATE; do
+            [ -n "$CANDIDATE" ] || continue
+            case "$CANDIDATE" in
+              Pods-*|Expo*|React-*) continue ;;
+            esac
+            if xcodebuild -workspace "$WORKSPACE" -scheme "$CANDIDATE" -configuration Release -showBuildSettings 2>/dev/null | grep -q 'PRODUCT_TYPE = com.apple.product-type.application'; then
+              SCHEME="$CANDIDATE"
+              break
+            fi
+          done <<< "$SCHEMES"
+
+          if [ -z "$SCHEME" ]; then
+            echo "No application scheme found"
+            printf '%s\n' "$SCHEMES"
+            exit 1
+          fi
+          echo "Building application scheme: $SCHEME"
+          xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration Release -sdk iphoneos -derivedDataPath build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO AD_HOC_CODE_SIGNING_ALLOWED=YES build
+          APP_PATH=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' -print -quit)
+          if [ -z "$APP_PATH" ]; then
+            echo "No iOS application was produced"
+            exit 1
+          fi
+          rm -rf ../Payload ../Gym.ipa
           mkdir -p ../Payload
-          cp -r build/Build/Products/Release-iphoneos/*.app ../Payload/
+          cp -R "$APP_PATH" ../Payload/
           cd ..
           zip -r Gym.ipa Payload
 
       - name: Upload IPA Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: Gym-${{ inputs.build_id }}-Release
           path: Gym.ipa
