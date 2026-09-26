@@ -1,15 +1,15 @@
 {
   "expo": {
-    "name": "mi-primera-app",
-    "slug": "mi-primera-app",
+    "name": "Focus",
+    "slug": "focus-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/pulse-logo.png",
-    "scheme": "miprimeraapp",
+    "icon": "./Logo.png",
+    "scheme": "focusapp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/pulse-logo.png",
-      "bundleIdentifier": "com.alpharider058.gym",
+      "icon": "./Logo.png",
+      "bundleIdentifier": "com.focus.dominant",
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -17,24 +17,24 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#FFFFFF",
-        "foregroundImage": "./assets/images/pulse-logo.png",
+        "backgroundColor": "#0F0F23",
+        "foregroundImage": "./Logo.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/pulse-logo.png"
+        "monochromeImage": "./Logo.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/pulse-logo.png"
+      "favicon": "./Logo.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#FFFFFF",
-          "image": "./assets/images/pulse-logo.png",
+          "backgroundColor": "#0F0F23",
+          "image": "./Logo.png",
           "imageWidth": 180
         }
       ],
