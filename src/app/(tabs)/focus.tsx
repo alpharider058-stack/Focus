@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import Animated, { FadeIn, ZoomIn } from "react-native-reanimated";
 
 import { Button, Card, Chip, Field, Header, Loading, ProgressBar, Screen, SectionLabel, Stat } from "@/components/focus-ui";
+import { Glow } from "@/components/motion";
 import { FOCUS } from "@/constants/theme";
 import { useSnapshot } from "@/hooks/use-snapshot";
 import {
@@ -104,22 +106,26 @@ export default function FocusScreen() {
   };
 
   const status = !active ? "LISTO" : finished ? "COMPLETADO" : active.paused ? "EN PAUSA" : "EN ENFOQUE";
+  const accent = finished ? FOCUS.success : FOCUS.ember;
 
   return (
     <Screen>
       <Header eyebrow="ENFOQUE" title="Modo bestia" subtitle="Una tarea. Cero distracciones. El móvil boca abajo." />
 
       <Card accent={finished ? FOCUS.success : active ? FOCUS.ember : undefined} style={styles.timerCard}>
-        <Text style={[styles.status, finished && { color: FOCUS.success }]}>{status}</Text>
+        <Glow color={accent} size={300} active={running || finished} />
+        <Animated.Text key={status} entering={FadeIn.duration(400)} style={[styles.status, finished && { color: FOCUS.success }]}>
+          {status}
+        </Animated.Text>
         <Text style={styles.time} accessibilityRole="timer">
           {formatTime(totalSeconds - elapsed)}
         </Text>
         {active?.intent ? <Text style={styles.intent}>{active.intent}</Text> : null}
-        <ProgressBar value={elapsed / totalSeconds} color={finished ? FOCUS.success : FOCUS.ember} height={10} />
+        <ProgressBar value={elapsed / totalSeconds} color={accent} height={10} />
       </Card>
 
       {!active ? (
-        <>
+        <View style={styles.stack}>
           <Card>
             <SectionLabel>¿En qué vas a enfocarte?</SectionLabel>
             <Field value={intent} onChangeText={setIntent} placeholder="Ej: Terminar el informe" maxLength={120} />
@@ -136,11 +142,13 @@ export default function FocusScreen() {
             </View>
           </Card>
           <Button label={`Empezar ${duration} minutos`} onPress={() => void start()} />
-        </>
+        </View>
       ) : finished ? (
-        <Button label={`Reclamar +${active.durationMin} XP`} onPress={() => void finish()} />
+        <Animated.View entering={ZoomIn.springify().damping(12)}>
+          <Button label={`Reclamar +${active.durationMin} XP`} onPress={() => void finish()} />
+        </Animated.View>
       ) : (
-        <>
+        <View style={styles.stack}>
           <View style={styles.row}>
             <Button
               label={active.paused ? "Reanudar" : "Pausar"}
@@ -156,14 +164,16 @@ export default function FocusScreen() {
             />
           </View>
           <Button label="Abandonar sesión (sin XP)" variant="danger" onPress={() => void cancel()} />
-        </>
+        </View>
       )}
 
       {reward !== null ? (
-        <Card accent={FOCUS.success}>
-          <Text style={styles.rewardTitle}>+{reward} XP</Text>
-          <Text style={styles.muted}>Así se construye el respeto propio. Una sesión cada vez.</Text>
-        </Card>
+        <Animated.View entering={ZoomIn.springify().damping(11)}>
+          <Card accent={FOCUS.success}>
+            <Text style={styles.rewardTitle}>+{reward} XP</Text>
+            <Text style={styles.muted}>Así se construye el respeto propio. Una sesión cada vez.</Text>
+          </Card>
+        </Animated.View>
       ) : null}
 
       <View style={styles.row}>
@@ -191,11 +201,12 @@ export default function FocusScreen() {
 }
 
 const styles = StyleSheet.create({
-  timerCard: { alignItems: "center", paddingVertical: 28, gap: 12 },
+  timerCard: { alignItems: "center", justifyContent: "center", paddingVertical: 28, gap: 12, overflow: "hidden" },
   status: { color: FOCUS.ember, fontSize: 12, fontWeight: "900", letterSpacing: 3 },
   time: { color: FOCUS.text, fontSize: 72, fontWeight: "900", fontVariant: ["tabular-nums"], letterSpacing: 1 },
   intent: { color: FOCUS.textMuted, fontSize: 15, fontWeight: "600", textAlign: "center" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  stack: { gap: 14 },
   row: { flexDirection: "row", gap: 10 },
   flex: { flex: 1 },
   rewardTitle: { color: FOCUS.success, fontSize: 26, fontWeight: "900" },

@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import Animated, { Easing, FadeInDown, FadeInRight } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button, Chip, Field, ProgressBar } from "@/components/focus-ui";
@@ -12,6 +13,15 @@ const IDENTITY_PLACEHOLDERS = [
   "Soy alguien que entrena aunque no tenga ganas",
   "Soy alguien que no se rinde",
 ];
+
+/** Each onboarding step slides in from the right. */
+function StepTransition({ step, children }: { step: number; children: ReactNode }) {
+  return (
+    <Animated.View key={step} entering={FadeInRight.duration(420).easing(Easing.out(Easing.cubic))}>
+      {children}
+    </Animated.View>
+  );
+}
 
 export default function Onboarding({ onFinished }: { onFinished: (profile: Profile) => void }) {
   const insets = useSafeAreaInsets();
@@ -74,70 +84,74 @@ export default function Onboarding({ onFinished }: { onFinished: (profile: Profi
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}
       >
         <View style={styles.content}>
-          <Text style={styles.brand}>FOCUS</Text>
+          <Animated.Text entering={FadeInDown.delay(150).duration(500)} style={styles.brand}>
+            FOCUS
+          </Animated.Text>
           <ProgressBar value={(step + 1) / STEPS} />
           <Text style={styles.stepLabel}>
             Paso {step + 1} de {STEPS}
           </Text>
 
-          {step === 0 ? (
-            <View style={styles.block}>
-              <Text style={styles.title}>Aquí se forja tu mejor versión.</Text>
-              <Text style={styles.body}>
-                Disciplina diaria, enfoque profundo y un ego que se gana a base de cumplir. Empecemos por lo básico.
-              </Text>
-              <Text style={styles.label}>¿Cómo te llamas?</Text>
-              <Field value={name} onChangeText={setName} placeholder="Tu nombre" autoFocus maxLength={30} returnKeyType="next" onSubmitEditing={next} />
-            </View>
-          ) : null}
+          <StepTransition step={step}>
+            {step === 0 ? (
+              <View style={styles.block}>
+                <Text style={styles.title}>Aquí se forja tu mejor versión.</Text>
+                <Text style={styles.body}>
+                  Disciplina diaria, enfoque profundo y un ego que se gana a base de cumplir. Empecemos por lo básico.
+                </Text>
+                <Text style={styles.label}>¿Cómo te llamas?</Text>
+                <Field value={name} onChangeText={setName} placeholder="Tu nombre" autoFocus maxLength={30} returnKeyType="next" onSubmitEditing={next} />
+              </View>
+            ) : null}
 
-          {step === 1 ? (
-            <View style={styles.block}>
-              <Text style={styles.title}>¿Quién decides ser?</Text>
-              <Text style={styles.body}>
-                Tu objetivo marca el rumbo. Tus frases de identidad te recuerdan cada día quién eres.
-              </Text>
-              <Text style={styles.label}>Tu gran objetivo</Text>
-              <Field value={goal} onChangeText={setGoal} placeholder="Ej: Ser la persona más disciplinada que conozco" maxLength={100} />
-              <Text style={styles.label}>Tu identidad (al menos una)</Text>
-              {identity.map((item, index) => (
-                <Field
-                  key={IDENTITY_PLACEHOLDERS[index] ?? String(index)}
-                  value={item}
-                  onChangeText={(value) => updateIdentity(index, value)}
-                  placeholder={IDENTITY_PLACEHOLDERS[index]}
-                  maxLength={90}
-                />
-              ))}
-            </View>
-          ) : null}
-
-          {step === 2 ? (
-            <View style={styles.block}>
-              <Text style={styles.title}>Tus juramentos diarios</Text>
-              <Text style={styles.body}>
-                Elige los hábitos que vas a cumplir cada día. Empieza con pocos y cúmplelos siempre.
-              </Text>
-              <View style={styles.chips}>
-                {options.map((title) => (
-                  <Chip key={title} label={title} active={selected.includes(title)} onPress={() => toggleHabit(title)} />
+            {step === 1 ? (
+              <View style={styles.block}>
+                <Text style={styles.title}>¿Quién decides ser?</Text>
+                <Text style={styles.body}>
+                  Tu objetivo marca el rumbo. Tus frases de identidad te recuerdan cada día quién eres.
+                </Text>
+                <Text style={styles.label}>Tu gran objetivo</Text>
+                <Field value={goal} onChangeText={setGoal} placeholder="Ej: Ser la persona más disciplinada que conozco" maxLength={100} />
+                <Text style={styles.label}>Tu identidad (al menos una)</Text>
+                {identity.map((item, index) => (
+                  <Field
+                    key={IDENTITY_PLACEHOLDERS[index] ?? String(index)}
+                    value={item}
+                    onChangeText={(value) => updateIdentity(index, value)}
+                    placeholder={IDENTITY_PLACEHOLDERS[index]}
+                    maxLength={90}
+                  />
                 ))}
               </View>
-              <Text style={styles.label}>Añade el tuyo</Text>
-              <View style={styles.row}>
-                <Field
-                  value={custom}
-                  onChangeText={setCustom}
-                  placeholder="Ej: Estudiar 1 hora"
-                  style={styles.flex}
-                  maxLength={80}
-                  returnKeyType="done"
-                  onSubmitEditing={addCustom}
-                />
-                <Button label="Añadir" variant="secondary" onPress={addCustom} disabled={!custom.trim()} />
+            ) : null}
+
+            {step === 2 ? (
+              <View style={styles.block}>
+                <Text style={styles.title}>Tus juramentos diarios</Text>
+                <Text style={styles.body}>
+                  Elige los hábitos que vas a cumplir cada día. Empieza con pocos y cúmplelos siempre.
+                </Text>
+                <View style={styles.chips}>
+                  {options.map((title) => (
+                    <Chip key={title} label={title} active={selected.includes(title)} onPress={() => toggleHabit(title)} />
+                  ))}
+                </View>
+                <Text style={styles.label}>Añade el tuyo</Text>
+                <View style={styles.row}>
+                  <Field
+                    value={custom}
+                    onChangeText={setCustom}
+                    placeholder="Ej: Estudiar 1 hora"
+                    style={styles.flex}
+                    maxLength={80}
+                    returnKeyType="done"
+                    onSubmitEditing={addCustom}
+                  />
+                  <Button label="Añadir" variant="secondary" onPress={addCustom} disabled={!custom.trim()} />
+                </View>
               </View>
-            </View>
-          ) : null}
+            ) : null}
+          </StepTransition>
 
           <View style={styles.actions}>
             {step > 0 ? <Button label="Atrás" variant="secondary" onPress={() => setStep(step - 1)} style={styles.flex} /> : null}
