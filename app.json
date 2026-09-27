@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./Logo.png",
     "scheme": "focusapp",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "ios": {
       "icon": "./Logo.png",
       "bundleIdentifier": "com.focus.dominant",
@@ -17,7 +17,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0F0F23",
+        "backgroundColor": "#08080C",
         "foregroundImage": "./Logo.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./Logo.png"
@@ -33,7 +33,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0F0F23",
+          "backgroundColor": "#08080C",
           "image": "./Logo.png",
           "imageWidth": 180
         }

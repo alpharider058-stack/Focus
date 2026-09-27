@@ -1,56 +1,37 @@
 import { NativeTabs } from "expo-router/unstable-native-tabs";
-import { useColorScheme } from "react-native";
 
-import { Colors } from "@/constants/theme";
+import { FOCUS } from "@/constants/theme";
 
 export default function AppTabs() {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === "unspecified" ? "light" : scheme];
-
   return (
     <NativeTabs
-      backgroundColor={colors.background}
-      indicatorColor={colors.backgroundElement}
-      labelStyle={{ selected: { color: colors.text } }}
+      backgroundColor={FOCUS.surface}
+      indicatorColor={FOCUS.ember}
+      labelStyle={{ selected: { color: FOCUS.ember, fontWeight: "700" } }}
     >
       <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Label>Inicio</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require("@/assets/images/tabIcons/home.png")}
-          renderingMode="template"
-        />
+        <NativeTabs.Trigger.Label>Hoy</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon src={require("@/assets/images/tabIcons/home.png")} renderingMode="template" />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="explore">
-        <NativeTabs.Trigger.Label>Rutinas</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require("@/assets/images/tabIcons/explore.png")}
-          renderingMode="template"
-        />
+      <NativeTabs.Trigger name="discipline">
+        <NativeTabs.Trigger.Label>Disciplina</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon src={require("@/assets/images/tabIcons/explore.png")} renderingMode="template" />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="calculator">
-        <NativeTabs.Trigger.Label>Fuerza</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require("@/assets/images/tabIcons/explore.png")}
-          renderingMode="template"
-        />
+      <NativeTabs.Trigger name="focus">
+        <NativeTabs.Trigger.Label>Enfoque</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon src={require("@/assets/images/tabIcons/home.png")} renderingMode="template" />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="plans">
-        <NativeTabs.Trigger.Label>Plan</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require("@/assets/images/tabIcons/home.png")}
-          renderingMode="template"
-        />
+      <NativeTabs.Trigger name="ego">
+        <NativeTabs.Trigger.Label>Ego</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon src={require("@/assets/images/tabIcons/explore.png")} renderingMode="template" />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="coach">
-        <NativeTabs.Trigger.Label>Coach IA</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require("@/assets/images/tabIcons/explore.png")}
-          renderingMode="template"
-        />
+      <NativeTabs.Trigger name="profile">
+        <NativeTabs.Trigger.Label>Perfil</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon src={require("@/assets/images/tabIcons/home.png")} renderingMode="template" />
       </NativeTabs.Trigger>
     </NativeTabs>
   );

@@ -36,7 +36,7 @@ export function AnimatedSplashOverlay() {
   const image = (
     <Image
       style={styles.splashLogo}
-      source={require("@/assets/images/pulse-logo.png")}
+      source={require("../../Logo.png")}
     />
   );
 
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
   },
   splashOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#08080C",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 1000,
