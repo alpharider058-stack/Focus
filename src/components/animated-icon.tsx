@@ -36,7 +36,7 @@ export function AnimatedSplashOverlay() {
   const image = (
     <Image
       style={styles.splashLogo}
-      source={require("@/assets/images/pulse-logo.png")}
+      source={require("../../Logo.png")}
     />
   );
 
