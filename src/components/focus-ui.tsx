@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
+import { Children, isValidElement, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useFocusEffect } from "expo-router";
 import {
   ActivityIndicator,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,12 +11,47 @@ import {
   type TextInputProps,
   type ViewStyle,
 } from "react-native";
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  LinearTransition,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSpring,
+  withTiming,
+  ZoomIn,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { PressableScale } from "@/components/motion";
 import { BottomTabInset, FOCUS, MaxContentWidth } from "@/constants/theme";
 
+const ENTER_EASING = Easing.out(Easing.cubic);
+
+/**
+ * Scrollable screen. Every direct child fades up in a soft stagger,
+ * replayed each time the tab regains focus. Items glide when the list changes.
+ */
 export function Screen({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
+  const [cycle, setCycle] = useState(0);
+  const firstFocus = useRef(true);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocus.current) {
+        firstFocus.current = false;
+        return;
+      }
+      setCycle((value) => value + 1);
+    }, []),
+  );
+
+  const items = Children.toArray(children);
+
   return (
     <View style={styles.root}>
       <ScrollView
@@ -27,7 +62,19 @@ export function Screen({ children }: { children: ReactNode }) {
           paddingBottom: insets.bottom + BottomTabInset + 32,
         }}
       >
-        <View style={styles.content}>{children}</View>
+        <View key={cycle} style={styles.content}>
+          {items.map((child, index) => (
+            <Animated.View
+              key={isValidElement(child) && child.key != null ? String(child.key) : String(index)}
+              entering={FadeInDown.delay(Math.min(index, 8) * 55)
+                .duration(460)
+                .easing(ENTER_EASING)}
+              layout={LinearTransition.springify().damping(18).stiffness(160)}
+            >
+              {child}
+            </Animated.View>
+          ))}
+        </View>
       </ScrollView>
     </View>
   );
@@ -77,21 +124,15 @@ export function Button({
   style?: StyleProp<ViewStyle>;
 }) {
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.button,
-        buttonVariants[variant],
-        disabled && styles.disabled,
-        pressed && !disabled && styles.pressed,
-        style,
-      ]}
+      style={[styles.button, buttonVariants[variant], disabled && styles.disabled, style]}
     >
       <Text style={[styles.buttonText, buttonTextVariants[variant]]}>{label}</Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -107,42 +148,51 @@ export function Chip({
   color?: string;
 }) {
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.chip,
-        active && { backgroundColor: `${color}22`, borderColor: color },
-        pressed && styles.pressed,
-      ]}
+      scaleTo={0.92}
+      style={[styles.chip, active && { backgroundColor: `${color}22`, borderColor: color }]}
     >
       <Text style={[styles.chipText, active && { color }]}>{label}</Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 
+/** Progress bar whose fill glides to its new value. */
 export function ProgressBar({ value, color = FOCUS.ember, height = 8 }: { value: number; color?: string; height?: number }) {
   const safe = Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
   const pct = Math.round(safe * 100);
+  const [trackWidth, setTrackWidth] = useState(0);
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = withTiming(safe, { duration: 750, easing: ENTER_EASING });
+  }, [safe, progress]);
+
+  const fillStyle = useAnimatedStyle(() => ({ width: progress.value * trackWidth }));
+
   return (
     <View
       accessibilityRole="progressbar"
       accessibilityValue={{ min: 0, max: 100, now: pct }}
+      onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)}
       style={[styles.track, { height, borderRadius: height / 2 }]}
     >
-      <View style={{ width: `${pct}%` as const, height, borderRadius: height / 2, backgroundColor: color }} />
+      <Animated.View style={[{ height, borderRadius: height / 2, backgroundColor: color }, fillStyle]} />
     </View>
   );
 }
 
+/** Stat tile. The number pops in every time it changes. */
 export function Stat({ label, value, suffix, color = FOCUS.text }: { label: string; value: string; suffix?: string; color?: string }) {
   return (
     <View style={styles.stat}>
-      <Text style={[styles.statValue, { color }]}>
+      <Animated.Text key={value} entering={FadeInUp.duration(320).easing(ENTER_EASING)} style={[styles.statValue, { color }]}>
         {value}
         {suffix ? <Text style={styles.statSuffix}> {suffix}</Text> : null}
-      </Text>
+      </Animated.Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
@@ -163,31 +213,41 @@ export function HabitRow({
 }) {
   return (
     <View style={[styles.habitRow, done && styles.habitRowDone]}>
-      <Pressable
+      <PressableScale
         accessibilityRole="checkbox"
         accessibilityState={{ checked: done }}
         accessibilityLabel={title}
         onPress={onPress}
-        style={({ pressed }) => [styles.habitMain, pressed && styles.pressed]}
+        scaleTo={0.97}
+        style={styles.habitMain}
       >
         <View style={[styles.check, done && styles.checkDone]}>
-          {done ? <Text style={styles.checkMark}>{"\u2713"}</Text> : null}
+          {done ? (
+            <Animated.Text entering={ZoomIn.springify().damping(10).stiffness(260)} style={styles.checkMark}>
+              {"\u2713"}
+            </Animated.Text>
+          ) : null}
         </View>
         <View style={styles.flex}>
           <Text style={[styles.habitTitle, done && styles.habitTitleDone]}>{title}</Text>
-          {meta ? <Text style={styles.habitMeta}>{meta}</Text> : null}
+          {meta ? (
+            <Animated.Text key={meta} entering={FadeIn.duration(300)} style={styles.habitMeta}>
+              {meta}
+            </Animated.Text>
+          ) : null}
         </View>
-      </Pressable>
+      </PressableScale>
       {onDelete ? (
-        <Pressable
+        <PressableScale
           accessibilityRole="button"
           accessibilityLabel={`Eliminar ${title}`}
           hitSlop={10}
           onPress={onDelete}
-          style={({ pressed }) => [styles.delete, pressed && styles.pressed]}
+          scaleTo={0.85}
+          style={styles.delete}
         >
           <Text style={styles.deleteText}>{"\u00D7"}</Text>
-        </Pressable>
+        </PressableScale>
       ) : null}
     </View>
   );
@@ -205,6 +265,20 @@ export function Field(props: TextInputProps) {
   );
 }
 
+function Bar({ value, max, height, color, index }: { value: number; max: number; height: number; color: string; index: number }) {
+  const barHeight = useSharedValue(0);
+  const target = value > 0 ? Math.max(4, (value / max) * height) : 0;
+
+  useEffect(() => {
+    barHeight.value = withDelay(index * 60, withSpring(target, { damping: 16, stiffness: 140 }));
+  }, [target, index, barHeight]);
+
+  const style = useAnimatedStyle(() => ({ height: Math.max(0, barHeight.value) }));
+
+  return <Animated.View style={[{ width: "100%", backgroundColor: color, borderRadius: 6 }, style]} />;
+}
+
+/** Bar chart whose bars grow from the floor one after another. */
 export function BarChart({
   items,
   color = FOCUS.ember,
@@ -217,18 +291,11 @@ export function BarChart({
   const max = Math.max(1, ...items.map((item) => item.value));
   return (
     <View style={styles.chart}>
-      {items.map((item) => (
+      {items.map((item, index) => (
         <View key={item.key} style={styles.chartCol}>
           <Text style={styles.chartValue}>{item.value > 0 ? String(item.value) : ""}</Text>
           <View style={[styles.chartTrack, { height }]}>
-            <View
-              style={{
-                width: "100%",
-                height: item.value > 0 ? Math.max(4, (item.value / max) * height) : 0,
-                backgroundColor: color,
-                borderRadius: 6,
-              }}
-            />
+            <Bar value={item.value} max={max} height={height} color={color} index={index} />
           </View>
           <Text style={styles.chartLabel}>{item.label}</Text>
         </View>
@@ -276,7 +343,6 @@ const styles = StyleSheet.create({
   },
   buttonText: { fontSize: 15, fontWeight: "800", letterSpacing: 0.3 },
   disabled: { opacity: 0.4 },
-  pressed: { opacity: 0.8 },
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 9,
