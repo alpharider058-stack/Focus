@@ -1,6 +1,16 @@
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import Animated, { Easing, FadeInRight } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+/** Each onboarding step slides in from the right. */
+function StepTransition({ step, children }: { step: number; children: React.ReactNode }) {
+  return (
+    <Animated.View key={step} entering={FadeInRight.duration(420).easing(Easing.out(Easing.cubic))}>
+      {children}
+    </Animated.View>
+  );
+}
 
 import { Button, Chip, Field, ProgressBar } from "@/components/focus-ui";
 import { FOCUS, MaxContentWidth } from "@/constants/theme";

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Platform, StyleSheet, Text, View } from "react-native";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 
 import { BarChart, Button, Card, Chip, Field, Header, Loading, Screen, SectionLabel } from "@/components/focus-ui";
+import { PressableScale } from "@/components/motion";
 import { FOCUS } from "@/constants/theme";
 import { affirmationFor } from "@/data/affirmations";
 import { useSnapshot } from "@/hooks/use-snapshot";
@@ -89,7 +91,9 @@ export default function EgoScreen() {
 
       <Card accent={FOCUS.violet}>
         <SectionLabel>Afirmación</SectionLabel>
-        <Text style={styles.affirmation}>{`\u201C${affirmationFor(today, offset)}\u201D`}</Text>
+        <Animated.Text key={offset} entering={FadeInDown.duration(450)} style={styles.affirmation}>
+          {`\u201C${affirmationFor(today, offset)}\u201D`}
+        </Animated.Text>
         <View style={styles.row}>
           <Button label="Otra afirmación" variant="secondary" onPress={() => setOffset((value) => value + 1)} style={styles.flex} />
         </View>
@@ -101,16 +105,17 @@ export default function EgoScreen() {
         <Text style={styles.question}>Del 1 al 10, ¿cuánto te respetas hoy?</Text>
         <View style={styles.scores}>
           {SCORES.map((score) => (
-            <Pressable
+            <PressableScale
               key={score}
               accessibilityRole="button"
               accessibilityLabel={`Puntuación ${score}`}
               accessibilityState={{ selected: confidence === score }}
               onPress={() => setConfidence(score)}
-              style={({ pressed }) => [styles.score, confidence === score && styles.scoreActive, pressed && styles.pressed]}
+              scaleTo={0.86}
+              style={[styles.score, confidence === score && styles.scoreActive]}
             >
               <Text style={[styles.scoreText, confidence === score && styles.scoreTextActive]}>{score}</Text>
-            </Pressable>
+            </PressableScale>
           ))}
         </View>
         <Field
@@ -122,7 +127,11 @@ export default function EgoScreen() {
           style={styles.multiline}
         />
         <Button label={alreadyChecked ? "Actualizar check-in" : `Guardar (+${XP_REWARDS.mirror} XP)`} onPress={() => void saveCheckIn()} disabled={confidence === null} />
-        {mirrorMessage ? <Text style={styles.success}>{mirrorMessage}</Text> : null}
+        {mirrorMessage ? (
+          <Animated.Text key={mirrorMessage} entering={FadeIn.duration(350)} style={styles.success}>
+            {mirrorMessage}
+          </Animated.Text>
+        ) : null}
       </Card>
 
       <Card>
@@ -150,15 +159,16 @@ export default function EgoScreen() {
             </Text>
             <Text style={styles.winText}>{win.text}</Text>
           </View>
-          <Pressable
+          <PressableScale
             accessibilityRole="button"
             accessibilityLabel="Eliminar registro"
             hitSlop={10}
             onPress={() => confirmRemove(win)}
-            style={({ pressed }) => [styles.delete, pressed && styles.pressed]}
+            scaleTo={0.85}
+            style={styles.delete}
           >
             <Text style={styles.deleteText}>{"\u00D7"}</Text>
-          </Pressable>
+          </PressableScale>
         </View>
       ))}
     </Screen>
@@ -185,7 +195,6 @@ const styles = StyleSheet.create({
   scoreActive: { backgroundColor: FOCUS.violet, borderColor: FOCUS.violet },
   scoreText: { color: FOCUS.text, fontSize: 16, fontWeight: "800" },
   scoreTextActive: { color: "#0B0B0F" },
-  pressed: { opacity: 0.8 },
   multiline: { minHeight: 80, textAlignVertical: "top" },
   success: { color: FOCUS.success, fontSize: 13, fontWeight: "700" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
